@@ -1,5 +1,5 @@
 Install dependent library first
-- [cluster](https://github.com/TonyGen/cluster-cpp)
+- [cluster](https://github.com/TonyGen/remote-cpp)
 
 Remove '-ccp' suffix when downloading
 	git clone git://github.com/TonyGen/mongoDeploy-cpp.git mongoDeploy
