@@ -1,4 +1,4 @@
-/* */
+/* Deploy mongo processes on hosts */
 
 #ifndef MONGO_DEPLOY_H_
 #define MONGO_DEPLOY_H_
@@ -19,6 +19,8 @@ extern program::Options defaultMongoD;
  * unique values generated for dbpath and port options if not already supplied +
  * defaultMongoD where not already supplied. */
 remote::Process startMongoD (remote::Host, program::Options = program::emptyOptions);
+
+inline bool isMongoD (remote::Process p) {return p.process.program.executable == "mongod";}
 
 /** Host and port of a mongoD/S process */
 std::string hostPort (remote::Process);
@@ -69,9 +71,9 @@ remote::Process startMongoS (remote::Host, ConfigSet, program::Options = program
 /** A full sharding deployment with routers (mongos), config servers (ConfigSet), and ReplicaSet shards */
 class ShardSet {
 public:
-	std::vector<ReplicaSet> shards;
 	ConfigSet configSet;
 	std::vector<remote::Process> routers;  // mongos's
+	std::vector<ReplicaSet> shards;
 	/** ShardSet starts out empty (no shards) */
 	ShardSet (ConfigSet configSet, std::vector<remote::Process> routers) : configSet(configSet), routers(routers) {}
 	/** Start replica set and add it as another shard */
@@ -87,6 +89,8 @@ public:
 /** Start empty shard set with given config server specs and router (mongos) specs */
 ShardSet startShardSet (std::vector<remote::Host> cfgHosts, std::vector<remote::Host> routerHosts, program::Options cfgOpts = program::emptyOptions, program::Options routerOpts = program::emptyOptions);
 
+/** Return all mongoD/S processes involved in ShardSet */
+std::vector<remote::Process> allProcesses (ShardSet);
 
 /** Return a connection to one of the MongoS's if sharded, the "replicaSet" connection if just replicated, or the solo MongoD if just that. Use the supplied arbitrary number to choose amongst choices if necessary */
 //mongo::DBClientConnection connect (unsigned r);

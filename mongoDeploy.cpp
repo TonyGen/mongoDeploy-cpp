@@ -158,7 +158,7 @@ mongoDeploy::ShardSet mongoDeploy::startShardSet (std::vector<remote::Host> cfgH
 	return ShardSet (cs, rs);
 }
 
-static void addShard (mongoDeploy::ShardSet s, mongoDeploy::ReplicaSet r) {
+static void addShard (mongoDeploy::ShardSet& s, mongoDeploy::ReplicaSet r) {
 	mongo::DBClientConnection c;
 	c.connect (mongoDeploy::hostPort (s.routers[0]));
     mongo::BSONObj info;
@@ -190,6 +190,16 @@ void mongoDeploy::ShardSet::addStartRouter (remote::Host host, program::Options 
 /** Remove i'th router from list and stop it */
 void mongoDeploy::ShardSet::removeStopRouter (unsigned i) {
 	//TODO
+}
+
+/** Return all mongoD/S processes involved in ShardSet */
+std::vector<remote::Process> mongoDeploy::allProcesses (ShardSet s) {
+	std::vector<remote::Process> procs;
+	procs.insert (procs.end(), s.configSet.cfgServers.begin(), s.configSet.cfgServers.end());
+	procs.insert (procs.end(), s.routers.begin(), s.routers.end());
+	for (unsigned i = 0; i < s.shards.size(); i ++)
+		procs.insert (procs.end(), s.shards[i].replicas.begin(), s.shards[i].replicas.end());
+	return procs;
 }
 
 
