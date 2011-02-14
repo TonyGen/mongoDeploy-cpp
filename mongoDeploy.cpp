@@ -192,16 +192,6 @@ void mongoDeploy::ShardSet::removeStopRouter (unsigned i) {
 	//TODO
 }
 
-/** Return all mongoD/S processes involved in ShardSet */
-std::vector<remote::Process> mongoDeploy::allProcesses (ShardSet s) {
-	std::vector<remote::Process> procs;
-	procs.insert (procs.end(), s.configSet.cfgServers.begin(), s.configSet.cfgServers.end());
-	procs.insert (procs.end(), s.routers.begin(), s.routers.end());
-	for (unsigned i = 0; i < s.shards.size(); i ++)
-		procs.insert (procs.end(), s.shards[i].replicas.begin(), s.shards[i].replicas.end());
-	return procs;
-}
-
 
 /** Return a connection to one of the MongoS's if sharded, the "replicaSet" connection if just replicated, or the solo MongoD if just that. Use the supplied arbitrary number to choose amongst choices if necessary */
 //mongo::DBClientConnection mongoDeploy::connect (unsigned r) {

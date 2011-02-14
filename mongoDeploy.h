@@ -89,9 +89,6 @@ public:
 /** Start empty shard set with given config server specs and router (mongos) specs */
 ShardSet startShardSet (std::vector<remote::Host> cfgHosts, std::vector<remote::Host> routerHosts, program::Options cfgOpts = program::emptyOptions, program::Options routerOpts = program::emptyOptions);
 
-/** Return all mongoD/S processes involved in ShardSet */
-std::vector<remote::Process> allProcesses (ShardSet);
-
 /** Return a connection to one of the MongoS's if sharded, the "replicaSet" connection if just replicated, or the solo MongoD if just that. Use the supplied arbitrary number to choose amongst choices if necessary */
 //mongo::DBClientConnection connect (unsigned r);
 
