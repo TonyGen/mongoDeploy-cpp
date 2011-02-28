@@ -38,6 +38,7 @@ class ReplicaSet {
 public:
 	std::vector<remote::Process> replicas;
 	ReplicaSet (std::vector<remote::Process> replicas) : replicas(replicas) {}
+	ReplicaSet () {}  // for serialization
 	std::string name();  // replica set name gotten from first replica's 'replSet' option.
 	/** Start mongod and add it to replica set */
 	/** Replica-set name "/" comma-separated hostPorts of active members only */
@@ -55,6 +56,7 @@ class ConfigSet {
 public:
 	std::vector<remote::Process> cfgServers;
 	ConfigSet (std::vector<remote::Process> cfgServers) : cfgServers(cfgServers) {}
+	ConfigSet () {}  // for serialization
 };
 
 /** Start config mongoD on each host. 1 or 3 hosts expected */
@@ -76,6 +78,7 @@ public:
 	std::vector<ReplicaSet> shards;
 	/** ShardSet starts out empty (no shards) */
 	ShardSet (ConfigSet configSet, std::vector<remote::Process> routers) : configSet(configSet), routers(routers) {}
+	ShardSet () {}  // for serialization
 	/** Start replica set and add it as another shard */
 	void addStartShard (std::vector<remote::Host>, std::vector<RsMemberSpec>, mongo::BSONObj rsSettings = mongo::BSONObj());
 	/** Remove i'th shard and stop it */
@@ -93,5 +96,7 @@ ShardSet startShardSet (std::vector<remote::Host> cfgHosts, std::vector<remote::
 //mongo::DBClientConnection connect (unsigned r);
 
 }
+
+#include "serialize.h"  // include after serialized types declared above
 
 #endif /* MONGO_DEPLOY_H_ */
