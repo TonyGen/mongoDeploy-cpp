@@ -14,7 +14,7 @@ unsigned long nextDbPath = 0;
 /** start mongod program with given options +
  * unique values generated for dbpath and port options if not already supplied +.
  * defaultMongoD where not already supplied. */
-remote::Process mongoDeploy::startMongoD (remote::Host host, program::Options options) {
+rprocess::Process mongoDeploy::startMongoD (remote::Host host, program::Options options) {
 	program::Options config;
 	config.push_back (std::make_pair (std::string ("rest"), ""));
 	config.push_back (std::make_pair (std::string ("dbpath"), mongoDbPathPrefix + to_string (++ nextDbPath)));
@@ -28,17 +28,17 @@ remote::Process mongoDeploy::startMongoD (remote::Host host, program::Options op
 	program.prepCommand = ss.str();
 	program.executable = "mongod";
 	program.options = config2;
-	return remote::launch (host, program);
+	return rprocess::launch (host, program);
 }
 
 /** Host and port of a mongoD/S process */
-std::string mongoDeploy::hostPort (remote::Process mongoProcess) {
+std::string mongoDeploy::hostPort (rprocess::Process mongoProcess) {
 	remote::Host host = mongoProcess.host;
 	std::string port = * program::lookup ("port", mongoProcess.process.program.options);
 	return host + ":" + port;
 }
 
-mongo::HostAndPort mongoDeploy::hostAndPort (remote::Process mongoProcess) {
+mongo::HostAndPort mongoDeploy::hostAndPort (rprocess::Process mongoProcess) {
 	return mongo::HostAndPort (hostPort (mongoProcess));
 }
 
@@ -50,10 +50,10 @@ mongoDeploy::ReplicaSet mongoDeploy::startReplicaSet (std::vector<remote::Host> 
 	program::Options options;
 	std::string rsName = "rs" + to_string (nextReplicaSetId++);
 	options.push_back (std::make_pair ("replSet", rsName));
-	std::vector<remote::Process> replicas;
+	std::vector<rprocess::Process> replicas;
 	mongo::BSONArrayBuilder members;
 	for (unsigned i = 0; i < min (hosts.size(), memberSpecs.size()); i++) {
-		remote::Process p = startMongoD (hosts[i], program::merge (options, memberSpecs[i].opts));
+		rprocess::Process p = startMongoD (hosts[i], program::merge (options, memberSpecs[i].opts));
 		replicas.push_back (p);
 		mongo::BSONObjBuilder obj;
 		obj.appendElements (BSON ("_id" << i << "host" << hostPort (p)));
@@ -94,7 +94,7 @@ std::string mongoDeploy::ReplicaSet::nameActiveHosts () {
 	//TODO: above assumes first is active, plus we should list all active hosts.
 }
 
-static void addReplica (mongoDeploy::ReplicaSet rs, remote::Process mongod, mongo::BSONObj memberConfig) {
+static void addReplica (mongoDeploy::ReplicaSet rs, rprocess::Process mongod, mongo::BSONObj memberConfig) {
 	vector<mongo::HostAndPort> hs = fmap (mongoDeploy::hostAndPort, rs.replicas);
 	mongo::DBClientReplicaSet c (rs.name(), hs);
 	bool ok = c.connect();
@@ -111,7 +111,7 @@ static void addReplica (mongoDeploy::ReplicaSet rs, remote::Process mongod, mong
 void mongoDeploy::ReplicaSet::addStartReplica (remote::Host host, RsMemberSpec memberSpec) {
 	program::Options options;
 	options.push_back (std::make_pair ("replSet", name()));
-	remote::Process proc = startMongoD (host, program::merge (options, memberSpec.opts));
+	rprocess::Process proc = startMongoD (host, program::merge (options, memberSpec.opts));
 	sleep (20);
 	addReplica (*this, proc, memberSpec.memberConfig);
 }
@@ -123,9 +123,9 @@ void removeStopReplica (unsigned i) {
 
 /** Start config mongoD on each host. 1 or 3 hosts expected */
 mongoDeploy::ConfigSet mongoDeploy::startConfigSet (std::vector<remote::Host> hosts, program::Options opts) {
-	std::vector<remote::Process> procs;
+	std::vector<rprocess::Process> procs;
 	for (unsigned i = 0; i < hosts.size(); i++) {
-		remote::Process p = startMongoD (hosts[i], opts);
+		rprocess::Process p = startMongoD (hosts[i], opts);
 		procs.push_back (p);
 	}
 	sleep (20);
@@ -138,7 +138,7 @@ program::Options mongoDeploy::defaultMongoS;
 /** Start mongos program with given options +
  * unique values generated for dbpath and port options if not already supplied +.
  * defaultMongoS where not already supplied. */
-remote::Process mongoDeploy::startMongoS (remote::Host host, ConfigSet cs, program::Options options) {
+rprocess::Process mongoDeploy::startMongoS (remote::Host host, ConfigSet cs, program::Options options) {
 	program::Options config;
 	config.push_back (std::make_pair (std::string ("port"), to_string (27017 + (++ nextDbPath))));
 	config.push_back (std::make_pair (std::string ("configdb"), concat (intersperse (std::string(","), fmap (hostPort, cs.cfgServers)))));
@@ -147,14 +147,14 @@ remote::Process mongoDeploy::startMongoS (remote::Host host, ConfigSet cs, progr
 	program::Program program;
 	program.executable = "mongos";
 	program.options = config2;
-	return remote::launch (host, program);
+	return rprocess::launch (host, program);
 }
 
 /** Start empty shard set with given config server specs and router (mongos) specs */
 mongoDeploy::ShardSet mongoDeploy::startShardSet (std::vector<remote::Host> cfgHosts, std::vector<remote::Host> routerHosts, program::Options cfgOpts, program::Options routerOpts) {
 	ConfigSet cs = startConfigSet (cfgHosts, cfgOpts);
-	boost::function1<remote::Process,remote::Host> f = boost::bind (startMongoS, _1, cs, routerOpts);
-	std::vector<remote::Process> rs = fmap (f, routerHosts);
+	boost::function1<rprocess::Process,remote::Host> f = boost::bind (startMongoS, _1, cs, routerOpts);
+	std::vector<rprocess::Process> rs = fmap (f, routerHosts);
 	return ShardSet (cs, rs);
 }
 

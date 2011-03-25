@@ -7,6 +7,7 @@
 #include <vector>
 #include <mongo/client/dbclient.h>
 #include <remote/remote.h>
+#include <remote/process.h>
 
 namespace mongoDeploy {
 
@@ -18,13 +19,13 @@ extern program::Options defaultMongoD;
 /** Start mongod program with given options +
  * unique values generated for dbpath and port options if not already supplied +
  * defaultMongoD where not already supplied. */
-remote::Process startMongoD (remote::Host, program::Options = program::emptyOptions);
+rprocess::Process startMongoD (remote::Host, program::Options = program::emptyOptions);
 
-inline bool isMongoD (remote::Process p) {return p.process.program.executable == "mongod";}
+inline bool isMongoD (rprocess::Process p) {return p.process.program.executable == "mongod";}
 
 /** Host and port of a mongoD/S process */
-std::string hostPort (remote::Process);
-mongo::HostAndPort hostAndPort (remote::Process);
+std::string hostPort (rprocess::Process);
+mongo::HostAndPort hostAndPort (rprocess::Process);
 
 /** Server command-line options + member replSetConfig options for a replica in a replica set */
 struct RsMemberSpec {
@@ -36,8 +37,8 @@ struct RsMemberSpec {
 /** Replica set of mongoD processes. RS name and config can be gotten from any replica process */
 class ReplicaSet {
 public:
-	std::vector<remote::Process> replicas;
-	ReplicaSet (std::vector<remote::Process> replicas) : replicas(replicas) {}
+	std::vector<rprocess::Process> replicas;
+	ReplicaSet (std::vector<rprocess::Process> replicas) : replicas(replicas) {}
 	ReplicaSet () {}  // for serialization
 	std::string name();  // replica set name gotten from first replica's 'replSet' option.
 	/** Start mongod and add it to replica set */
@@ -54,8 +55,8 @@ ReplicaSet startReplicaSet (std::vector<remote::Host>, std::vector<RsMemberSpec>
 /** Sharding config servers */
 class ConfigSet {
 public:
-	std::vector<remote::Process> cfgServers;
-	ConfigSet (std::vector<remote::Process> cfgServers) : cfgServers(cfgServers) {}
+	std::vector<rprocess::Process> cfgServers;
+	ConfigSet (std::vector<rprocess::Process> cfgServers) : cfgServers(cfgServers) {}
 	ConfigSet () {}  // for serialization
 };
 
@@ -68,16 +69,16 @@ extern program::Options defaultMongoS;
 /** Start mongos program with given options +
  * unique values generated for dbpath and port options if not already supplied +
  * defaultMongoS where not already supplied. */
-remote::Process startMongoS (remote::Host, ConfigSet, program::Options = program::emptyOptions);
+rprocess::Process startMongoS (remote::Host, ConfigSet, program::Options = program::emptyOptions);
 
 /** A full sharding deployment with routers (mongos), config servers (ConfigSet), and ReplicaSet shards */
 class ShardSet {
 public:
 	ConfigSet configSet;
-	std::vector<remote::Process> routers;  // mongos's
+	std::vector<rprocess::Process> routers;  // mongos's
 	std::vector<ReplicaSet> shards;
 	/** ShardSet starts out empty (no shards) */
-	ShardSet (ConfigSet configSet, std::vector<remote::Process> routers) : configSet(configSet), routers(routers) {}
+	ShardSet (ConfigSet configSet, std::vector<rprocess::Process> routers) : configSet(configSet), routers(routers) {}
 	ShardSet () {}  // for serialization
 	/** Start replica set and add it as another shard */
 	void addStartShard (std::vector<remote::Host>, std::vector<RsMemberSpec>, mongo::BSONObj rsSettings = mongo::BSONObj());
@@ -97,6 +98,28 @@ ShardSet startShardSet (std::vector<remote::Host> cfgHosts, std::vector<remote::
 
 }
 
-#include "serialize.h"  // include after serialized types declared above
+/* Serialization */
+
+#include <boost/serialization/utility.hpp>
+#include <boost/serialization/vector.hpp>
+
+namespace boost {
+namespace serialization {
+
+template <class Archive> void serialize (Archive & ar, mongoDeploy::ReplicaSet & x, const unsigned version) {
+	ar & x.replicas;
+}
+
+template <class Archive> void serialize (Archive & ar, mongoDeploy::ConfigSet & x, const unsigned version) {
+	ar & x.cfgServers;
+}
+
+template <class Archive> void serialize (Archive & ar, mongoDeploy::ShardSet & x, const unsigned version) {
+	ar & x.configSet;
+	ar & x.routers;
+	ar & x.shards;
+}
+
+}}
 
 #endif /* MONGO_DEPLOY_H_ */
