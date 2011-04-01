@@ -46,6 +46,7 @@ static volatile unsigned long nextReplicaSetId;
 
 /** Start replica set with given member specs and config options + generated 'replSet' and options filled in by 'startMongoD' (if not already supplied) */
 mongoDeploy::ReplicaSet mongoDeploy::startReplicaSet (std::vector<remote::Host> hosts, std::vector<RsMemberSpec> memberSpecs, mongo::BSONObj rsSettings) {
+	assert (hosts.size() == memberSpecs.size());
 	if (memberSpecs.size() == 0) throw std::runtime_error ("can't create empty replica set");
 	program::Options options;
 	std::string rsName = "rs" + to_string (++ nextReplicaSetId);
@@ -90,6 +91,7 @@ std::string mongoDeploy::ReplicaSet::name () {
 /** Active (non-arbiter, non-passive) replicas in replica set */
 // TODO: exclude passive too
 std::vector <rprocess::Process> mongoDeploy::ReplicaSet::activeReplicas () {
+	assert (replicas.size() == memberSpecs.size());
 	std::vector <rprocess::Process> active;
 	for (unsigned i = 0; i < replicas.size(); i++) {
 		if (! memberSpecs[i].memberConfig.getBoolField ("arbiterOnly"))

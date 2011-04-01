@@ -30,8 +30,9 @@ mongo::HostAndPort hostAndPort (rprocess::Process);
 /** Server command-line options + member replSetConfig options for a single replica in a replica set */
 struct RsMemberSpec {
 	program::Options opts;
-	mongo::BSONObj memberConfig;
+	mongo::BSONObj memberConfig;  // TODO: serialize BSONObj
 	RsMemberSpec (program::Options opts, mongo::BSONObj memberConfig) : opts(opts), memberConfig(memberConfig) {}
+	RsMemberSpec () {} // for serialization
 };
 
 /** Replica set of mongoD processes. RS name and config can be gotten from any replica process */
@@ -39,7 +40,8 @@ class ReplicaSet {
 public:
 	std::vector<rprocess::Process> replicas;
 	std::vector<RsMemberSpec> memberSpecs;
-	ReplicaSet (std::vector<rprocess::Process> replicas, std::vector<RsMemberSpec> memberSpecs) : replicas(replicas), memberSpecs(memberSpecs) {}
+	ReplicaSet (std::vector<rprocess::Process> replicas, std::vector<RsMemberSpec> memberSpecs) : replicas(replicas), memberSpecs(memberSpecs)
+		{assert (replicas.size() == memberSpecs.size());}
 	ReplicaSet () {}  // for serialization
 	std::string name();  // replica set name gotten from first replica's 'replSet' option.
 	/** Active replicas. Excludes arbiter and passive replicas */
@@ -105,6 +107,11 @@ ShardSet startShardSet (std::vector<remote::Host> cfgHosts, std::vector<remote::
 
 namespace boost {
 namespace serialization {
+
+template <class Archive> void serialize (Archive & ar, mongoDeploy::RsMemberSpec & x, const unsigned version) {
+	ar & x.opts;
+	ar & x.memberConfig;
+}
 
 template <class Archive> void serialize (Archive & ar, mongoDeploy::ReplicaSet & x, const unsigned version) {
 	ar & x.replicas;
