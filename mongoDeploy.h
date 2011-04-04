@@ -30,7 +30,7 @@ mongo::HostAndPort hostAndPort (rprocess::Process);
 /** Server command-line options + member replSetConfig options for a single replica in a replica set */
 struct RsMemberSpec {
 	program::Options opts;
-	mongo::BSONObj memberConfig;  // TODO: serialize BSONObj
+	mongo::BSONObj memberConfig;
 	RsMemberSpec (program::Options opts, mongo::BSONObj memberConfig) : opts(opts), memberConfig(memberConfig) {}
 	RsMemberSpec () {} // for serialization
 };
@@ -102,11 +102,28 @@ ShardSet startShardSet (std::vector<remote::Host> cfgHosts, std::vector<remote::
 
 /* Serialization */
 
+#include <boost/serialization/split_free.hpp>
 #include <boost/serialization/utility.hpp>
 #include <boost/serialization/vector.hpp>
 
+BOOST_SERIALIZATION_SPLIT_FREE (mongo::BSONObj)
+
 namespace boost {
 namespace serialization {
+
+template <class Archive> void save (Archive& ar, const mongo::BSONObj& x, const unsigned version) {
+	unsigned n = x.objsize();
+	ar << n;
+	ar.save_binary (x.objdata(), n);
+}
+
+template <class Archive> void load (Archive& ar, mongo::BSONObj& x, const unsigned version) {
+	unsigned n;
+	ar >> n;
+	char* data = new char[n];
+	ar.load_binary (data, n);
+	x = mongo::BSONObj (data, true);
+}
 
 template <class Archive> void serialize (Archive & ar, mongoDeploy::RsMemberSpec & x, const unsigned version) {
 	ar & x.opts;
@@ -115,6 +132,7 @@ template <class Archive> void serialize (Archive & ar, mongoDeploy::RsMemberSpec
 
 template <class Archive> void serialize (Archive & ar, mongoDeploy::ReplicaSet & x, const unsigned version) {
 	ar & x.replicas;
+	ar & x.memberSpecs;
 }
 
 template <class Archive> void serialize (Archive & ar, mongoDeploy::ConfigSet & x, const unsigned version) {
