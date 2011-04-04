@@ -7,7 +7,7 @@
 #include <vector>
 #include <mongo/client/dbclient.h>
 #include <remote/remote.h>
-#include <remote/process.h>
+#include <remoteJob/process.h>
 
 namespace mongoDeploy {
 
