@@ -4,6 +4,10 @@
 #include <10util/util.h>
 #include <boost/algorithm/string.hpp>
 
+void mongoDeploy::registerProcedures () {
+	rprocess::registerProcedures();
+}
+
 /** Prefix for data directory, a number get appended to this, eg. "dbms" + "1" */
 std::string mongoDeploy::mongoDbPathPrefix = "dbms";  // in current directory
 /** Default MongoD config is merged with user supplied config. User config options take precedence */

@@ -8,8 +8,13 @@
 #include <mongo/client/dbclient.h>
 #include <remote/remote.h>
 #include <remoteJob/process.h>
+#include <cassert>
 
 namespace mongoDeploy {
+
+/** Register any Procedures that clients of this module call on this server.
+ * This must be invoked at startup on every server expecting mongoDeploy requests */
+void registerProcedures ();
 
 /** Prefix for data directory, a number get appended to this, eg. "dbms" + "1" */
 extern std::string mongoDbPathPrefix;
