@@ -1,9 +1,9 @@
-/* Assumes util, job, remote, and mongoDeploy libraries have been built and installed in /usr/local/include and /usr/local/lib.
- * Compile as: g++ shardSet.cpp -o shardSet -I/opt/local/include -L/opt/local/lib -lboost_system-mt -lboost_filesystem-mt -lboost_thread-mt -lboost_serialization-mt -l10util -ljob -lremote -lmongoDeploy -lmongoclient -lpcre
+/* Assumes util, remote, and mongoDeploy libraries have been built and installed in /usr/local/include and /usr/local/lib.
+ * Compile as: g++ shardSet.cpp -o shardSet -I/opt/local/include -L/opt/local/lib -lboost_system-mt -lboost_filesystem-mt -lboost_thread-mt -lboost_serialization-mt -l10util -lremote -lmongoDeploy -lmongoclient -lpcre
  * Run as: `shardSet` */
 
 #include <mongoDeploy/mongoDeploy.h>
-#include <job/thread.h>
+#include <10util/thread.h>
 
 using namespace std;
 

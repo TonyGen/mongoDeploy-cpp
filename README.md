@@ -1,6 +1,6 @@
 Install dependent library first:
 
-- [remoteJob](https://github.com/TonyGen/remoteJob-cpp)
+- [remote](https://github.com/TonyGen/remote-cpp)
 
 Download and remove '-ccp' suffix:
 	git clone git://github.com/TonyGen/mongoDeploy-cpp.git mongoDeploy

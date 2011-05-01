@@ -1,20 +1,15 @@
 /* Deploy mongo processes on servers */
 
-#ifndef MONGO_DEPLOY_H_
-#define MONGO_DEPLOY_H_
+#pragma once
 
 #include <utility>
 #include <vector>
 #include <mongo/client/dbclient.h>
 #include <remote/remote.h>
-#include <remoteJob/process.h>
+#include <remote/process.h>
 #include <cassert>
 
 namespace mongoDeploy {
-
-/** Register any Procedures that clients of this module call on this server.
- * This must be invoked at startup on every server expecting mongoDeploy requests */
-void registerProcedures ();
 
 /** Prefix for data directory, a number get appended to this, eg. "dbms" + "1" */
 extern std::string mongoDbPathPrefix;
@@ -26,10 +21,10 @@ extern program::Options defaultMongoD;
  * defaultMongoD options where not already supplied. */
 rprocess::Process startMongoD (remote::Host, program::Options = program::Options());
 
-inline bool isMongoD (rprocess::Process p) {return p.process.program.executable == "mongod";}
+//inline bool isMongoD (rprocess::Process p) {return p.process.program.executable == "mongod";}
 
 /** Host and port of a mongoD/S process */
-std::string hostPort (rprocess::Process);
+std::string hostPortString (rprocess::Process);
 mongo::HostAndPort hostAndPort (rprocess::Process);
 
 /** Server command-line options + member replSetConfig options for a single replica in a replica set */
@@ -151,5 +146,3 @@ template <class Archive> void serialize (Archive & ar, mongoDeploy::ShardSet & x
 }
 
 }}
-
-#endif /* MONGO_DEPLOY_H_ */
