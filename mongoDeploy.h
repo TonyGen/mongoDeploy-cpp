@@ -122,7 +122,8 @@ template <class Archive> void load (Archive& ar, mongo::BSONObj& x, const unsign
 	ar >> n;
 	char* data = new char[n];
 	ar.load_binary (data, n);
-	x = mongo::BSONObj (data, true);
+	x = mongo::BSONObj (data) .copy(); //TODO: create owned object directly on data (and don't delete data)
+	delete[] data;
 }
 
 template <class Archive> void serialize (Archive & ar, mongoDeploy::RsMemberSpec & x, const unsigned version) {
