@@ -61,7 +61,7 @@ mongoDeploy::ReplicaSet mongoDeploy::startReplicaSet (std::vector<remote::Host> 
 		obj.appendElements (memberSpecs[i].memberConfig);
 		members.append (obj.done());
 	}
-	sleep (30); // TODO: check for liveness instead of assuming it takes at most 30 seconds.
+	sleep (40); // TODO: check for liveness instead of assuming it takes at most 30 seconds.
 	mongo::DBClientConnection c;
 	c.connect (hostPortString (replicas[0]));
 	mongo::BSONObj rsConfig = BSON ("_id" << rsName << "members" << members.arr() << "settings" << rsSettings);
