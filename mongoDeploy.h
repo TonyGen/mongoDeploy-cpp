@@ -19,13 +19,13 @@ extern program::Options defaultMongoD;
 /** Start mongod program with given options +
  * unique values generated for dbpath and port options if not already supplied +
  * defaultMongoD options where not already supplied. */
-rprocess::Process startMongoD (remote::Host, program::Options = program::Options());
+remote::Process startMongoD (remote::Host, program::Options = program::Options());
 
-//inline bool isMongoD (rprocess::Process p) {return p.process.program.executable == "mongod";}
+//inline bool isMongoD (remote::Process p) {return p.process.program.executable == "mongod";}
 
 /** Host and port of a mongoD/S process */
-std::string hostPortString (rprocess::Process);
-mongo::HostAndPort hostAndPort (rprocess::Process);
+std::string hostPortString (remote::Process);
+mongo::HostAndPort hostAndPort (remote::Process);
 
 /** Server command-line options + member replSetConfig options for a single replica in a replica set */
 struct RsMemberSpec {
@@ -38,14 +38,14 @@ struct RsMemberSpec {
 /** Replica set of mongoD processes. RS name and config can be gotten from any replica process */
 class ReplicaSet {
 public:
-	std::vector<rprocess::Process> replicas;
+	std::vector<remote::Process> replicas;
 	std::vector<RsMemberSpec> memberSpecs;
-	ReplicaSet (std::vector<rprocess::Process> replicas, std::vector<RsMemberSpec> memberSpecs) : replicas(replicas), memberSpecs(memberSpecs)
+	ReplicaSet (std::vector<remote::Process> replicas, std::vector<RsMemberSpec> memberSpecs) : replicas(replicas), memberSpecs(memberSpecs)
 		{assert (replicas.size() == memberSpecs.size());}
 	ReplicaSet () {}  // for serialization
 	std::string name();  // replica set name gotten from first replica's 'replSet' option.
 	/** Active replicas. Excludes arbiter and passive replicas */
-	std::vector<rprocess::Process> activeReplicas();
+	std::vector<remote::Process> activeReplicas();
 	/** Replica-set name "/" comma-separated hostPorts of active members only */
 	std::string nameActiveHosts();
 	/** Start mongod and add it to replica set */
@@ -60,8 +60,8 @@ ReplicaSet startReplicaSet (std::vector<remote::Host>, std::vector<RsMemberSpec>
 /** Sharding config servers */
 class ConfigSet {
 public:
-	std::vector<rprocess::Process> cfgServers;
-	ConfigSet (std::vector<rprocess::Process> cfgServers) : cfgServers(cfgServers) {}
+	std::vector<remote::Process> cfgServers;
+	ConfigSet (std::vector<remote::Process> cfgServers) : cfgServers(cfgServers) {}
 	ConfigSet () {}  // for serialization
 };
 
@@ -74,16 +74,16 @@ extern program::Options defaultMongoS;
 /** Start mongos program with given options +
  * unique values generated for dbpath and port options if not already supplied +
  * defaultMongoS options where not already supplied. */
-rprocess::Process startMongoS (remote::Host, ConfigSet, program::Options = program::Options());
+remote::Process startMongoS (remote::Host, ConfigSet, program::Options = program::Options());
 
 /** A full sharding deployment with routers (mongos), config servers (ConfigSet), and ReplicaSet shards */
 class ShardSet {
 public:
 	ConfigSet configSet;
-	std::vector<rprocess::Process> routers;  // mongos's
+	std::vector<remote::Process> routers;  // mongos's
 	std::vector<ReplicaSet> shards;
 	/** ShardSet starts out empty (no shards) */
-	ShardSet (ConfigSet configSet, std::vector<rprocess::Process> routers) : configSet(configSet), routers(routers) {}
+	ShardSet (ConfigSet configSet, std::vector<remote::Process> routers) : configSet(configSet), routers(routers) {}
 	ShardSet () {}  // for serialization
 	/** Start replica set of given specs on given hosts, and add it as another shard */
 	void addStartShard (std::vector<remote::Host>, std::vector<RsMemberSpec>, mongo::BSONObj rsSettings = mongo::BSONObj());
