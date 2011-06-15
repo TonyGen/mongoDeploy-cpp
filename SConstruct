@@ -1,7 +1,7 @@
 libname = 'mongoDeploy'
 
 lib = SharedLibrary (libname, Glob('*.cpp'),
-	CCFLAGS = ['-g'],
+	CCFLAGS = ['-g', '-rdynamic'],
 	CPPPATH = ['.', '/opt/local/include'],
 	LIBPATH = ['/opt/local/lib'],
 	LIBS = Split ('mongoclient 10util remote mongoclient boost_system-mt boost_thread-mt boost_filesystem-mt boost_serialization-mt') )

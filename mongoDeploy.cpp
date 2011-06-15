@@ -3,9 +3,13 @@
 #include "mongoDeploy.h"
 #include <10util/util.h>
 #include <boost/algorithm/string.hpp>
+#include <10util/thread.h>
+#include <10util/except.h>
+
+using namespace std;
 
 /** Prefix for data directory, a number get appended to this, eg. "dbms" + "1" */
-std::string mongoDeploy::mongoDbPathPrefix = "dbms";  // in current directory
+string mongoDeploy::mongoDbPathPrefix = "dbms";  // in current directory
 /** Default MongoD config is merged with user supplied config. User config options take precedence */
 program::Options mongoDeploy::defaultMongoD;
 
@@ -14,27 +18,24 @@ static volatile unsigned long nextDbPath;
 /** start mongod program with given options +
  * unique values generated for dbpath and port options if not already supplied +.
  * defaultMongoD options where not already supplied. */
-remote::Process mongoDeploy::startMongoD (remote::Host host, program::Options options) {
+mongoDeploy::MongoD mongoDeploy::startMongoD (remote::Host host, program::Options options) {
 	program::Options config;
-	config.push_back (std::make_pair (std::string ("rest"), ""));
-	config.push_back (std::make_pair (std::string ("dbpath"), mongoDbPathPrefix + to_string (++ nextDbPath)));
-	config.push_back (std::make_pair (std::string ("port"), to_string (27100 + nextDbPath)));
+	config.push_back (make_pair (string ("rest"), ""));
+	config.push_back (make_pair (string ("dbpath"), mongoDbPathPrefix + to_string (++ nextDbPath)));
+	config.push_back (make_pair (string ("port"), to_string (27100 + nextDbPath)));
 	program::Options config1 = program::merge (config, defaultMongoD);
 	program::Options config2 = program::merge (config1, options);  //user options have precedence
-	program::Program program;
-	std::string path = * program::lookup ("dbpath", config2);
-	std::stringstream ss;
+	string path = * program::lookup ("dbpath", config2);
+	stringstream ss;
 	ss << "rm -rf " << path << " && mkdir -p " << path;
-	program.prepCommand = ss.str();
-	program.executable = "mongod";
-	program.options = config2;
+	program::Program program (ss.str(), "mongod", config2);
 	return remote::launch (host, program);
 }
 
 /** Host and port of a mongoD/S process */
-std::string mongoDeploy::hostPortString (remote::Process mongoProcess) {
+string mongoDeploy::hostPortString (remote::Process mongoProcess) {
 	remote::Host host = mongoProcess.host();
-	std::string port = * program::lookup ("port", remote::program (mongoProcess) .options);
+	string port = * program::lookup ("port", remote::program (mongoProcess) .options);
 	return remote::hostPort(host).hostname + ":" + port;
 }
 
@@ -42,57 +43,99 @@ mongo::HostAndPort mongoDeploy::hostAndPort (remote::Process mongoProcess) {
 	return mongo::HostAndPort (hostPortString (mongoProcess));
 }
 
+/** Try to connect every 2 secs until successful. Give up after maxSecs (60 secs by default) */
+void mongoDeploy::waitToConnect (mongo::DBClientConnection &c, string hostPort, unsigned maxSecs) {
+	unsigned secs = 0;
+	while (true)
+		try {
+			c.connect (hostPort);
+			return;
+		} catch (mongo::ConnectException &e) {
+			if (secs >= maxSecs) except::raise (e);
+			thread::sleep (2);
+			secs += 2;
+		}
+}
+
+/** Wait for process to be ready (listening) */
+void mongoDeploy::waitForReady (remote::Process mongoProcess, unsigned maxSecs) {
+	mongo::DBClientConnection c;
+	waitToConnect (c, hostPortString (mongoProcess), maxSecs);
+}
+
+/** Good if one primary and rest secondary */
+static bool goodReplStatus (mongo::BSONObj &info) {
+	vector<mongo::BSONElement> ms = info.getField("members").Array();
+	bool primary = false;
+	for (unsigned i = 0; i < ms.size(); i++) {
+		int state = ms[i].Obj().getIntField("state");
+		if (state == 1) {primary = true; continue;}
+		if (state != 2) return false;
+	}
+	return primary;
+}
+
+static mongo::BSONObj waitForGoodReplStatus (mongo::DBClientConnection &c, unsigned maxSecs = 60) {
+	unsigned secs = 0;
+	mongo::BSONObj info;
+	while (true) {
+		if (secs >= maxSecs) throw runtime_error ("replica set failed to initiate");
+		c.runCommand ("admin", BSON ("replSetGetStatus" << 1), info);
+		if (goodReplStatus (info)) return info;
+		thread::sleep (2);
+		secs += 2;
+	}
+}
+
 static volatile unsigned long nextReplicaSetId;
 
 /** Start replica set with given member specs and config options + generated 'replSet' and options filled in by 'startMongoD' (if not already supplied) */
-mongoDeploy::ReplicaSet mongoDeploy::startReplicaSet (std::vector<remote::Host> hosts, std::vector<RsMemberSpec> memberSpecs, mongo::BSONObj rsSettings) {
+mongoDeploy::ReplicaSet mongoDeploy::startReplicaSet (vector<remote::Host> hosts, vector<RsMemberSpec> memberSpecs, mongo::BSONObj rsSettings) {
 	assert (hosts.size() == memberSpecs.size());
-	if (memberSpecs.size() == 0) throw std::runtime_error ("can't create empty replica set");
+	if (memberSpecs.size() == 0) throw runtime_error ("can't create empty replica set");
 	program::Options options;
-	std::string rsName = "rs" + to_string (++ nextReplicaSetId);
-	options.push_back (std::make_pair ("replSet", rsName));
-	std::vector<remote::Process> replicas;
+	string rsName = "rs" + to_string (++ nextReplicaSetId);
+	options.push_back (make_pair ("replSet", rsName));
+	vector<MongoD> replicas;
 	mongo::BSONArrayBuilder members;
 	for (unsigned i = 0; i < min (hosts.size(), memberSpecs.size()); i++) {
-		remote::Process p = startMongoD (hosts[i], program::merge (options, memberSpecs[i].opts));
+		MongoD p = startMongoD (hosts[i], program::merge (options, memberSpecs[i].opts));
 		replicas.push_back (p);
 		mongo::BSONObjBuilder obj;
 		obj.appendElements (BSON ("_id" << i << "host" << hostPortString (p)));
 		obj.appendElements (memberSpecs[i].memberConfig);
 		members.append (obj.done());
 	}
-	sleep (32); // TODO: check for liveness instead of assuming it takes at most 30 seconds.
 	mongo::DBClientConnection c;
-	c.connect (hostPortString (replicas[0]));
+	waitToConnect (c, hostPortString (replicas[0]));
 	mongo::BSONObj rsConfig = BSON ("_id" << rsName << "members" << members.arr() << "settings" << rsSettings);
     mongo::BSONObj info;
-    std::cout << "replSetInitiate: " << rsConfig << " ->" << std::endl;
+    cout << "replSetInitiate: " << rsConfig << " ->" << endl;
     c.runCommand ("admin", BSON ("replSetInitiate" << rsConfig), info);
-    std::cout << info << std::endl;
-    sleep (45); // TODO: check for readiness instead of assuming it takes at most 45 seconds.
-    c.runCommand ("admin", BSON ("replSetGetStatus" << 1), info);
-    std::cout << "replSetGetStatus -> " << info << std::endl;
-    //TODO wait until replica set is initiated
+    cout << " " << info << endl;
+    cout << "replSetGetStatus -> " << flush;
+    info = waitForGoodReplStatus (c);
+    cout << info << endl;
 	return ReplicaSet (replicas, memberSpecs);
 }
 
 /** Extract replica set name from replica set name + seed list */
-static std::string parseReplSetName (std::string replSetString) {
-	std::vector<std::string> parts;
+static string parseReplSetName (string replSetString) {
+	vector<string> parts;
 	boost::split (parts, replSetString, boost::is_any_of ("/"));
 	return *parts.begin();
 }
 
-std::string mongoDeploy::ReplicaSet::name () {
-	std::string replSetString = * program::lookup ("replSet", remote::program (replicas[0]) .options);
+string mongoDeploy::ReplicaSet::name () {
+	string replSetString = * program::lookup ("replSet", remote::program (replicas[0]) .options);
 	return parseReplSetName (replSetString);
 }
 
 /** Active (non-arbiter, non-passive) replicas in replica set */
 // TODO: exclude passive too
-std::vector <remote::Process> mongoDeploy::ReplicaSet::activeReplicas () {
+vector <mongoDeploy::MongoD> mongoDeploy::ReplicaSet::activeReplicas () {
 	assert (replicas.size() == memberSpecs.size());
-	std::vector <remote::Process> active;
+	vector <MongoD> active;
 	for (unsigned i = 0; i < replicas.size(); i++) {
 		if (! memberSpecs[i].memberConfig.getBoolField ("arbiterOnly"))
 			active.push_back (replicas[i]);
@@ -102,18 +145,18 @@ std::vector <remote::Process> mongoDeploy::ReplicaSet::activeReplicas () {
 
 /** Replica-set name "/" comma-separated hostPorts of active hosts.
  * Passive hosts are not included because it breaks addshard command */
-std::string mongoDeploy::ReplicaSet::nameActiveHosts () {
-	return name() + "/" + concat (intersperse (std::string(","), fmap (hostPortString, activeReplicas())));
+string mongoDeploy::ReplicaSet::nameActiveHosts () {
+	return name() + "/" + concat (intersperse (string(","), fmap (hostPortString, activeReplicas())));
 }
 
 static void addReplica (mongoDeploy::ReplicaSet rs, remote::Process mongod, mongo::BSONObj memberConfig) {
 	vector<mongo::HostAndPort> hs = fmap (mongoDeploy::hostAndPort, rs.replicas);
 	mongo::DBClientReplicaSet c (rs.name(), hs);
 	bool ok = c.connect();
-	if (!ok) throw std::runtime_error ("Unable to connect to replica set " + rs.name());
+	if (!ok) throw runtime_error ("Unable to connect to replica set " + rs.name());
 
 	mongo::BSONObj cfg = c.findOne ("local.system.replset", mongo::BSONObj());
-	if (cfg.isEmpty()) throw std::runtime_error ("Missing replica set config " + rs.name());
+	if (cfg.isEmpty()) throw runtime_error ("Missing replica set config " + rs.name());
 	int ver = cfg.getIntField ("version");
 	cfg = cfg.replaceFieldNames (BSON ("version" << ver+1));
 	//TODO: finish this method
@@ -122,9 +165,9 @@ static void addReplica (mongoDeploy::ReplicaSet rs, remote::Process mongod, mong
 /** Start mongod and add it to replica set */
 void mongoDeploy::ReplicaSet::addStartReplica (remote::Host host, RsMemberSpec memberSpec) {
 	program::Options options;
-	options.push_back (std::make_pair ("replSet", name()));
-	remote::Process proc = startMongoD (host, program::merge (options, memberSpec.opts));
-	sleep (20);  //TODO: check for liveness instead of assuming live after 20 secs
+	options.push_back (make_pair ("replSet", name()));
+	MongoD proc = startMongoD (host, program::merge (options, memberSpec.opts));
+	waitForReady (proc);
 	addReplica (*this, proc, memberSpec.memberConfig);
 }
 
@@ -134,13 +177,10 @@ void removeStopReplica (unsigned i) {
 }
 
 /** Start config mongoD on each host. 1 or 3 hosts expected */
-mongoDeploy::ConfigSet mongoDeploy::startConfigSet (std::vector<remote::Host> hosts, program::Options opts) {
-	std::vector<remote::Process> procs;
-	for (unsigned i = 0; i < hosts.size(); i++) {
-		remote::Process p = startMongoD (hosts[i], opts);
-		procs.push_back (p);
-	}
-	sleep (20);  //TODO: check for liveness instead of assuming live after 20 secs
+mongoDeploy::ConfigSet mongoDeploy::startConfigSet (vector<remote::Host> hosts, program::Options opts) {
+	vector<MongoD> procs;
+	for (unsigned i = 0; i < hosts.size(); i++) procs.push_back (startMongoD (hosts[i], opts));
+	for (unsigned i = 0; i < procs.size(); i++) waitForReady (procs[i]);
 	return ConfigSet (procs);
 }
 
@@ -150,10 +190,10 @@ program::Options mongoDeploy::defaultMongoS;
 /** Start mongos program with given options +
  * unique values generated for dbpath and port options if not already supplied +.
  * defaultMongoS where not already supplied. */
-remote::Process mongoDeploy::startMongoS (remote::Host host, ConfigSet cs, program::Options options) {
+mongoDeploy::MongoS mongoDeploy::startMongoS (remote::Host host, ConfigSet cs, program::Options options) {
 	program::Options config;
-	config.push_back (std::make_pair (std::string ("port"), to_string (27100 + (++ nextDbPath))));
-	config.push_back (std::make_pair (std::string ("configdb"), concat (intersperse (std::string(","), fmap (hostPortString, cs.cfgServers)))));
+	config.push_back (make_pair (string ("port"), to_string (27100 + (++ nextDbPath))));
+	config.push_back (make_pair (string ("configdb"), concat (intersperse (string(","), fmap (hostPortString, cs.cfgServers)))));
 	program::Options config1 = program::merge (config, defaultMongoS);
 	program::Options config2 = program::merge (config1, options);  //user options have precedence
 	program::Program program;
@@ -163,10 +203,11 @@ remote::Process mongoDeploy::startMongoS (remote::Host host, ConfigSet cs, progr
 }
 
 /** Start empty shard set with given config server specs and router (mongos) specs */
-mongoDeploy::ShardSet mongoDeploy::startShardSet (std::vector<remote::Host> cfgHosts, std::vector<remote::Host> routerHosts, program::Options cfgOpts, program::Options routerOpts) {
+mongoDeploy::ShardSet mongoDeploy::startShardSet (vector<remote::Host> cfgHosts, vector<remote::Host> routerHosts, program::Options cfgOpts, program::Options routerOpts) {
 	ConfigSet cs = startConfigSet (cfgHosts, cfgOpts);
-	boost::function1<remote::Process,remote::Host> f = boost::bind (startMongoS, _1, cs, routerOpts);
-	std::vector<remote::Process> rs = fmap (f, routerHosts);
+	boost::function1<MongoS,remote::Host> f = boost::bind (startMongoS, _1, cs, routerOpts);
+	vector<MongoS> rs = fmap (f, routerHosts);
+	for (unsigned i = 0; i < rs.size(); i++) waitForReady (rs[i]);
 	return ShardSet (cs, rs);
 }
 
@@ -175,16 +216,16 @@ static void addShard (mongoDeploy::ShardSet& s, mongoDeploy::ReplicaSet r) {
 	c.connect (mongoDeploy::hostPortString (s.routers[0]));
     mongo::BSONObj info;
     mongo::BSONObj cmd = BSON ("addshard" << r.nameActiveHosts());
-    std::cout << cmd << " -> " << std::endl;
+    cout << cmd << " -> " << endl;
     c.runCommand ("admin", cmd, info);
-    std::cout << info << std::endl;
+    cout << " " << info << endl;
     c.runCommand ("admin", BSON ("listshards" << 1), info);
-    std::cout << "listshards -> " << info << std::endl;
+    cout << "listshards -> " << info << endl;
     s.shards.push_back (r);
 }
 
 /** Start replica set of given specs on given hosts, and add it as another shard */
-void mongoDeploy::ShardSet::addStartShard (std::vector<remote::Host> hosts, std::vector<RsMemberSpec> memberSpec, mongo::BSONObj rsSettings) {
+void mongoDeploy::ShardSet::addStartShard (vector<remote::Host> hosts, vector<RsMemberSpec> memberSpec, mongo::BSONObj rsSettings) {
 	ReplicaSet r = startReplicaSet (hosts, memberSpec, rsSettings);
 	addShard (*this, r);
 }

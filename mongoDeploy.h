@@ -16,16 +16,24 @@ extern std::string mongoDbPathPrefix;
 /** Default MongoD config is merged with user supplied config. User config options take precedence */
 extern program::Options defaultMongoD;
 
+typedef remote::Process MongoD;
+
 /** Start mongod program with given options +
  * unique values generated for dbpath and port options if not already supplied +
  * defaultMongoD options where not already supplied. */
-remote::Process startMongoD (remote::Host, program::Options = program::Options());
+MongoD startMongoD (remote::Host, program::Options = program::Options());
 
 //inline bool isMongoD (remote::Process p) {return p.process.program.executable == "mongod";}
 
 /** Host and port of a mongoD/S process */
 std::string hostPortString (remote::Process);
 mongo::HostAndPort hostAndPort (remote::Process);
+
+/** Try to connect every 2 secs until successful. Give up after maxSecs (60 secs by default) */
+void waitToConnect (mongo::DBClientConnection &c, std::string hostPort, unsigned maxSecs = 60);
+
+/** Wait for process to be ready (listening). Wait up to 60 secs by default. */
+void waitForReady (remote::Process mongoProcess, unsigned maxSecs = 60);
 
 /** Server command-line options + member replSetConfig options for a single replica in a replica set */
 struct RsMemberSpec {
@@ -38,14 +46,14 @@ struct RsMemberSpec {
 /** Replica set of mongoD processes. RS name and config can be gotten from any replica process */
 class ReplicaSet {
 public:
-	std::vector<remote::Process> replicas;
+	std::vector<MongoD> replicas;
 	std::vector<RsMemberSpec> memberSpecs;
-	ReplicaSet (std::vector<remote::Process> replicas, std::vector<RsMemberSpec> memberSpecs) : replicas(replicas), memberSpecs(memberSpecs)
+	ReplicaSet (std::vector<MongoD> replicas, std::vector<RsMemberSpec> memberSpecs) : replicas(replicas), memberSpecs(memberSpecs)
 		{assert (replicas.size() == memberSpecs.size());}
 	ReplicaSet () {}  // for serialization
 	std::string name();  // replica set name gotten from first replica's 'replSet' option.
 	/** Active replicas. Excludes arbiter and passive replicas */
-	std::vector<remote::Process> activeReplicas();
+	std::vector<MongoD> activeReplicas();
 	/** Replica-set name "/" comma-separated hostPorts of active members only */
 	std::string nameActiveHosts();
 	/** Start mongod and add it to replica set */
@@ -60,8 +68,8 @@ ReplicaSet startReplicaSet (std::vector<remote::Host>, std::vector<RsMemberSpec>
 /** Sharding config servers */
 class ConfigSet {
 public:
-	std::vector<remote::Process> cfgServers;
-	ConfigSet (std::vector<remote::Process> cfgServers) : cfgServers(cfgServers) {}
+	std::vector<MongoD> cfgServers;
+	ConfigSet (std::vector<MongoD> cfgServers) : cfgServers(cfgServers) {}
 	ConfigSet () {}  // for serialization
 };
 
@@ -71,19 +79,21 @@ ConfigSet startConfigSet (std::vector<remote::Host>, program::Options = program:
 /** Default MongoS config is merged with user supplied config. User config options take precedence */
 extern program::Options defaultMongoS;
 
+typedef remote::Process MongoS;
+
 /** Start mongos program with given options +
  * unique values generated for dbpath and port options if not already supplied +
  * defaultMongoS options where not already supplied. */
-remote::Process startMongoS (remote::Host, ConfigSet, program::Options = program::Options());
+MongoS startMongoS (remote::Host, ConfigSet, program::Options = program::Options());
 
 /** A full sharding deployment with routers (mongos), config servers (ConfigSet), and ReplicaSet shards */
 class ShardSet {
 public:
 	ConfigSet configSet;
-	std::vector<remote::Process> routers;  // mongos's
+	std::vector<MongoS> routers;
 	std::vector<ReplicaSet> shards;
 	/** ShardSet starts out empty (no shards) */
-	ShardSet (ConfigSet configSet, std::vector<remote::Process> routers) : configSet(configSet), routers(routers) {}
+	ShardSet (ConfigSet configSet, std::vector<MongoS> routers) : configSet(configSet), routers(routers) {}
 	ShardSet () {}  // for serialization
 	/** Start replica set of given specs on given hosts, and add it as another shard */
 	void addStartShard (std::vector<remote::Host>, std::vector<RsMemberSpec>, mongo::BSONObj rsSettings = mongo::BSONObj());
