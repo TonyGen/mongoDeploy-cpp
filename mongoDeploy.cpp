@@ -44,43 +44,43 @@ mongo::HostAndPort mongoDeploy::hostAndPort (remote::Process mongoProcess) {
 }
 
 /** Try to connect every 2 secs until successful. Give up after maxSecs (60 secs by default) */
-void mongoDeploy::waitToConnect (mongo::DBClientConnection &c, string hostPort, unsigned maxSecs) {
+mongoDeploy::Connection mongoDeploy::waitConnect (string hostPort, unsigned maxSecs) {
 	unsigned secs = 0;
 	while (true)
 		try {
-			c.connect (hostPort);
-			return;
-		} catch (mongo::ConnectException &e) {
+			Connection c (new mongo::DBClientConnection);
+			c->connect (hostPort);
+			return c;
+		} catch (exception &e) {
 			if (secs >= maxSecs) except::raise (e);
 			thread::sleep (2);
 			secs += 2;
 		}
 }
 
-/** Wait for process to be ready (listening) */
-void mongoDeploy::waitForReady (remote::Process mongoProcess, unsigned maxSecs) {
-	mongo::DBClientConnection c;
-	waitToConnect (c, hostPortString (mongoProcess), maxSecs);
-}
+/** Try to connect every 2 secs until successful. Give up after maxSecs (60 secs by default) */
+mongoDeploy::Connection mongoDeploy::waitConnect (remote::Process mongoProcess, unsigned maxSecs) {
+	return waitConnect (hostPortString (mongoProcess), maxSecs);}
 
-/** Good if one primary and rest secondary */
+/** Good if one primary and rest secondaries and arbiters */
 static bool goodReplStatus (mongo::BSONObj &info) {
+	if (!info.getField("ok").trueValue()) return false;
 	vector<mongo::BSONElement> ms = info.getField("members").Array();
 	bool primary = false;
 	for (unsigned i = 0; i < ms.size(); i++) {
 		int state = ms[i].Obj().getIntField("state");
 		if (state == 1) {primary = true; continue;}
-		if (state != 2) return false;
+		if (state != 2 && state != 7) return false;
 	}
 	return primary;
 }
 
-static mongo::BSONObj waitForGoodReplStatus (mongo::DBClientConnection &c, unsigned maxSecs = 60) {
+static mongo::BSONObj waitForGoodReplStatus (mongoDeploy::Connection c, unsigned maxSecs = 60) {
 	unsigned secs = 0;
 	mongo::BSONObj info;
 	while (true) {
-		if (secs >= maxSecs) throw runtime_error ("replica set failed to initiate");
-		c.runCommand ("admin", BSON ("replSetGetStatus" << 1), info);
+		if (secs >= maxSecs) throw runtime_error ("replica set failed to initiate: " + to_string (info));
+		c->runCommand ("admin", BSON ("replSetGetStatus" << 1), info);
 		if (goodReplStatus (info)) return info;
 		thread::sleep (2);
 		secs += 2;
@@ -106,12 +106,12 @@ mongoDeploy::ReplicaSet mongoDeploy::startReplicaSet (vector<remote::Host> hosts
 		obj.appendElements (memberSpecs[i].memberConfig);
 		members.append (obj.done());
 	}
-	mongo::DBClientConnection c;
-	waitToConnect (c, hostPortString (replicas[0]));
+	Connection c = waitConnect (replicas[0]);
+	for (unsigned i = 1; i < replicas.size(); i++) waitConnect (replicas[i]);
 	mongo::BSONObj rsConfig = BSON ("_id" << rsName << "members" << members.arr() << "settings" << rsSettings);
     mongo::BSONObj info;
     cout << "replSetInitiate: " << rsConfig << " ->" << endl;
-    c.runCommand ("admin", BSON ("replSetInitiate" << rsConfig), info);
+    c->runCommand ("admin", BSON ("replSetInitiate" << rsConfig), info);
     cout << " " << info << endl;
     cout << "replSetGetStatus -> " << flush;
     info = waitForGoodReplStatus (c);
@@ -167,7 +167,7 @@ void mongoDeploy::ReplicaSet::addStartReplica (remote::Host host, RsMemberSpec m
 	program::Options options;
 	options.push_back (make_pair ("replSet", name()));
 	MongoD proc = startMongoD (host, program::merge (options, memberSpec.opts));
-	waitForReady (proc);
+	waitConnect (proc);
 	addReplica (*this, proc, memberSpec.memberConfig);
 }
 
@@ -180,7 +180,7 @@ void removeStopReplica (unsigned i) {
 mongoDeploy::ConfigSet mongoDeploy::startConfigSet (vector<remote::Host> hosts, program::Options opts) {
 	vector<MongoD> procs;
 	for (unsigned i = 0; i < hosts.size(); i++) procs.push_back (startMongoD (hosts[i], opts));
-	for (unsigned i = 0; i < procs.size(); i++) waitForReady (procs[i]);
+	for (unsigned i = 0; i < procs.size(); i++) waitConnect (procs[i]);
 	return ConfigSet (procs);
 }
 
@@ -207,7 +207,7 @@ mongoDeploy::ShardSet mongoDeploy::startShardSet (vector<remote::Host> cfgHosts,
 	ConfigSet cs = startConfigSet (cfgHosts, cfgOpts);
 	boost::function1<MongoS,remote::Host> f = boost::bind (startMongoS, _1, cs, routerOpts);
 	vector<MongoS> rs = fmap (f, routerHosts);
-	for (unsigned i = 0; i < rs.size(); i++) waitForReady (rs[i]);
+	for (unsigned i = 0; i < rs.size(); i++) waitConnect (rs[i]);
 	return ShardSet (cs, rs);
 }
 

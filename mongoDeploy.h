@@ -26,14 +26,14 @@ MongoD startMongoD (remote::Host, program::Options = program::Options());
 //inline bool isMongoD (remote::Process p) {return p.process.program.executable == "mongod";}
 
 /** Host and port of a mongoD/S process */
-std::string hostPortString (remote::Process);
-mongo::HostAndPort hostAndPort (remote::Process);
+std::string hostPortString (remote::Process mongoProcess);
+mongo::HostAndPort hostAndPort (remote::Process mongoProcess);
+
+typedef boost::shared_ptr<mongo::DBClientConnection> Connection;
 
 /** Try to connect every 2 secs until successful. Give up after maxSecs (60 secs by default) */
-void waitToConnect (mongo::DBClientConnection &c, std::string hostPort, unsigned maxSecs = 60);
-
-/** Wait for process to be ready (listening). Wait up to 60 secs by default. */
-void waitForReady (remote::Process mongoProcess, unsigned maxSecs = 60);
+Connection waitConnect (std::string hostPort, unsigned maxSecs = 60);
+Connection waitConnect (remote::Process mongoProcess, unsigned maxSecs = 60);
 
 /** Server command-line options + member replSetConfig options for a single replica in a replica set */
 struct RsMemberSpec {
