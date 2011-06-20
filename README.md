@@ -1,6 +1,6 @@
 Install dependent library first:
 
-- [remote](https://github.com/TonyGen/remote-cpp)
+- [10remote](https://github.com/TonyGen/10remote-cpp)
 
 Download and remove '-ccp' suffix:
 

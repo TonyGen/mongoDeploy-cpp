@@ -5,8 +5,8 @@
 #include <utility>
 #include <vector>
 #include <mongo/client/dbclient.h>
-#include <remote/remote.h>
-#include <remote/process.h>
+#include <10remote/remote.h>
+#include <10remote/process.h>
 #include <cassert>
 
 namespace mongoDeploy {
