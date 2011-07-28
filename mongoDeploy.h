@@ -124,6 +124,26 @@ void shardCollection (mongoDeploy::MongoS mongoS, std::string fullCollection, mo
 
 }
 
+/* Printing */
+
+// #include <10util/util.h> // output vector
+
+inline std::ostream& operator<< (std::ostream& out, const mongoDeploy::RsMemberSpec& x) {
+	out << "RsMemberSpec " << program::optionsString (x.opts) << " " << x.memberConfig;
+	return out;}
+
+inline std::ostream& operator<< (std::ostream& out, const mongoDeploy::ReplicaSet& x) {
+	out << "ReplicaSet " << x.replicas << " " << x.memberSpecs;
+	return out;}
+
+inline std::ostream& operator<< (std::ostream& out, const mongoDeploy::ConfigSet& x) {
+	out << "ConfigSet " << x.cfgServers;
+	return out;}
+
+inline std::ostream& operator<< (std::ostream& out, const mongoDeploy::ShardSet& x) {
+	out << "ShardSet " << x.configSet << " " << x.routers << " " << x.shards;
+	return out;}
+
 /* Serialization */
 
 #include <boost/serialization/split_free.hpp>
