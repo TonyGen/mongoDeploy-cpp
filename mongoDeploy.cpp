@@ -8,29 +8,7 @@
 
 using namespace std;
 
-/** Prefix for data directory, a number get appended to this, eg. "dbms" + "1" */
-string mongoDeploy::mongoDbPathPrefix = "dbms";  // in current directory
-/** Default MongoD config is merged with user supplied config. User config options take precedence */
-program::Options mongoDeploy::defaultMongoD;
-
-static volatile unsigned long nextDbPath;
-
-/** start mongod program with given options +
- * unique values generated for dbpath and port options if not already supplied +.
- * defaultMongoD options where not already supplied. */
-mongoDeploy::MongoD mongoDeploy::startMongoD (remote::Host host, program::Options options) {
-	program::Options config;
-	config.push_back (make_pair (string ("rest"), ""));
-	config.push_back (make_pair (string ("dbpath"), mongoDbPathPrefix + to_string (++ nextDbPath)));
-	config.push_back (make_pair (string ("port"), to_string (27100 + nextDbPath)));
-	program::Options config1 = program::merge (config, defaultMongoD);
-	program::Options config2 = program::merge (config1, options);  //user options have precedence
-	string path = * program::lookup ("dbpath", config2);
-	stringstream ss;
-	ss << "rm -rf " << path << " && mkdir -p " << path;
-	program::Program program (ss.str(), "mongod", config2);
-	return remote::launch (host, program);
-}
+/** Connection **/
 
 /** Host and port of a mongoD/S process */
 string mongoDeploy::hostPortString (remote::Process mongoProcess) {
@@ -61,6 +39,34 @@ mongoDeploy::Connection mongoDeploy::waitConnect (string hostPort, unsigned maxS
 /** Try to connect every 2 secs until successful. Give up after maxSecs (60 secs by default) */
 mongoDeploy::Connection mongoDeploy::waitConnect (remote::Process mongoProcess, unsigned maxSecs) {
 	return waitConnect (hostPortString (mongoProcess), maxSecs);}
+
+/** MongoD **/
+
+/** Prefix for data directory, a number get appended to this, eg. "dbms" + "1" */
+string mongoDeploy::mongoDbPathPrefix = "dbms";  // in current directory
+/** Default MongoD config is merged with user supplied config. User config options take precedence */
+program::Options mongoDeploy::defaultMongoD;
+
+static volatile unsigned long nextDbPath;
+
+/** start mongod program with given options +
+ * unique values generated for dbpath and port options if not already supplied +.
+ * defaultMongoD options where not already supplied. */
+mongoDeploy::MongoD mongoDeploy::startMongoD (remote::Host host, program::Options options) {
+	program::Options config;
+	config.push_back (make_pair (string ("rest"), ""));
+	config.push_back (make_pair (string ("dbpath"), mongoDbPathPrefix + to_string (++ nextDbPath)));
+	config.push_back (make_pair (string ("port"), to_string (27100 + nextDbPath)));
+	program::Options config1 = program::merge (config, defaultMongoD);
+	program::Options config2 = program::merge (config1, options);  //user options have precedence
+	string path = * program::lookup ("dbpath", config2);
+	stringstream ss;
+	ss << "rm -rf " << path << " && mkdir -p " << path;
+	program::Program program (ss.str(), "mongod", config2);
+	return remote::launch (host, program);
+}
+
+/** Replica set */
 
 /** Good if one primary and rest secondaries and arbiters */
 static bool goodReplStatus (mongo::BSONObj &info) {
@@ -159,7 +165,7 @@ static void addReplica (mongoDeploy::ReplicaSet rs, remote::Process mongod, mong
 	if (cfg.isEmpty()) throw runtime_error ("Missing replica set config " + rs.name());
 	int ver = cfg.getIntField ("version");
 	cfg = cfg.replaceFieldNames (BSON ("version" << ver+1));
-	//TODO: finish this method
+	throw "TODO: finish addReplica";
 }
 
 /** Start mongod and add it to replica set */
@@ -173,8 +179,10 @@ void mongoDeploy::ReplicaSet::addStartReplica (remote::Host host, RsMemberSpec m
 
 /** Remove i'th replica and stop it */
 void removeStopReplica (unsigned i) {
-	//TODO
+	throw "TODO removeStopReplica";
 }
+
+/** Shard cluster **/
 
 /** Start config mongoD on each host. 1 or 3 hosts expected */
 mongoDeploy::ConfigSet mongoDeploy::startConfigSet (vector<remote::Host> hosts, program::Options opts) {
@@ -232,15 +240,39 @@ void mongoDeploy::ShardSet::addStartShard (vector<remote::Host> hosts, vector<Rs
 
 /** Remove i'th shard and stop it */
 void mongoDeploy::ShardSet::removeStopShard (unsigned i) {
-	//TODO
+	throw "TODO removeStopShard";
 }
 
 /** Start mongos and add it to available routers */
 void mongoDeploy::ShardSet::addStartRouter (remote::Host host, program::Options opts) {
-	//TODO
+	throw "TODO addStartRouter";
 }
 
 /** Remove i'th router from list and stop it */
 void mongoDeploy::ShardSet::removeStopRouter (unsigned i) {
-	//TODO
+	throw "TODO remoteStopRouter";
+}
+
+/** Enable sharding on given database */
+void mongoDeploy::shardDatabase (MongoS mongoS, string database) {
+	using namespace mongo;
+	BSONObj info;
+	DBClientConnection c;
+	c.connect (mongoDeploy::hostAndPort (mongoS));
+	BSONObj cmd = BSON ("enablesharding" << database);
+	cout << cmd << " -> " << endl;
+	c.runCommand ("admin", cmd, info);
+	cout << info << endl;
+}
+
+/** Shard collection on key */
+void mongoDeploy::shardCollection (MongoS mongoS, string fullCollection, mongo::BSONObj shardKey) {
+	using namespace mongo;
+	BSONObj info;
+	DBClientConnection c;
+	c.connect (mongoDeploy::hostAndPort (mongoS));
+	BSONObj cmd = BSON ("shardcollection" << fullCollection << "key" << shardKey);
+	cout << cmd << " -> " << endl;
+	c.runCommand ("admin", cmd, info);
+	cout << info << endl;
 }

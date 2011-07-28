@@ -11,6 +11,20 @@
 
 namespace mongoDeploy {
 
+/** Connection **/
+
+/** Host and port of a mongoD/S process */
+std::string hostPortString (remote::Process mongoProcess);
+mongo::HostAndPort hostAndPort (remote::Process mongoProcess);
+
+typedef boost::shared_ptr<mongo::DBClientConnection> Connection;
+
+/** Try to connect every 2 secs until successful. Give up after maxSecs (60 secs by default) */
+Connection waitConnect (std::string hostPort, unsigned maxSecs = 60);
+Connection waitConnect (remote::Process mongoProcess, unsigned maxSecs = 60);
+
+/** MongoD **/
+
 /** Prefix for data directory, a number get appended to this, eg. "dbms" + "1" */
 extern std::string mongoDbPathPrefix;
 /** Default MongoD config is merged with user supplied config. User config options take precedence */
@@ -25,15 +39,7 @@ MongoD startMongoD (remote::Host, program::Options = program::Options());
 
 //inline bool isMongoD (remote::Process p) {return p.process.program.executable == "mongod";}
 
-/** Host and port of a mongoD/S process */
-std::string hostPortString (remote::Process mongoProcess);
-mongo::HostAndPort hostAndPort (remote::Process mongoProcess);
-
-typedef boost::shared_ptr<mongo::DBClientConnection> Connection;
-
-/** Try to connect every 2 secs until successful. Give up after maxSecs (60 secs by default) */
-Connection waitConnect (std::string hostPort, unsigned maxSecs = 60);
-Connection waitConnect (remote::Process mongoProcess, unsigned maxSecs = 60);
+/** Replica set **/
 
 /** Server command-line options + member replSetConfig options for a single replica in a replica set */
 struct RsMemberSpec {
@@ -64,6 +70,8 @@ public:
 
 /** Start replica set on given servers with given config options + generated 'replSet' and options filled in by 'startMongoD' (if not already supplied). Set-wide rsSettings can also be supplied. See http://www.mongodb.org/display/DOCS/Replica+Set+Configuration for config details. */
 ReplicaSet startReplicaSet (std::vector<remote::Host>, std::vector<RsMemberSpec>, mongo::BSONObj rsSettings = mongo::BSONObj());
+
+/** Shard cluster **/
 
 /** Sharding config servers */
 class ConfigSet {
@@ -107,6 +115,12 @@ public:
 
 /** Start empty shard set with given config server specs and router (mongos) specs */
 ShardSet startShardSet (std::vector<remote::Host> cfgHosts, std::vector<remote::Host> routerHosts, program::Options cfgOpts = program::Options(), program::Options routerOpts = program::Options());
+
+/** Enable sharding on given database */
+void shardDatabase (mongoDeploy::MongoS mongoS, std::string database);
+
+/** Shard collection on key. FullCollection includes database prefix. */
+void shardCollection (mongoDeploy::MongoS mongoS, std::string fullCollection, mongo::BSONObj shardKey);
 
 }
 
