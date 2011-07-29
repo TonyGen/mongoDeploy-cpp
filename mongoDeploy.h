@@ -117,10 +117,12 @@ public:
 ShardSet startShardSet (std::vector<remote::Host> cfgHosts, std::vector<remote::Host> routerHosts, program::Options cfgOpts = program::Options(), program::Options routerOpts = program::Options());
 
 /** Enable sharding on given database */
-void shardDatabase (mongoDeploy::MongoS mongoS, std::string database);
+void shardDatabase (std::string mongoSHostPort, std::string database);
+inline void shardDatabase (MongoS mongoS, std::string database) {shardDatabase (hostPortString (mongoS), database);}
 
 /** Shard collection on key. FullCollection includes database prefix. */
-void shardCollection (mongoDeploy::MongoS mongoS, std::string fullCollection, mongo::BSONObj shardKey);
+void shardCollection (std::string mongoSHostPort, std::string fullCollection, mongo::BSONObj shardKey);
+inline void shardCollection (MongoS mongoS, std::string fullCollection, mongo::BSONObj shardKey) {shardCollection (hostPortString (mongoS), fullCollection, shardKey);}
 
 }
 

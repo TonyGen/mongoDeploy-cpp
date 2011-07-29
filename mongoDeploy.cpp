@@ -254,11 +254,11 @@ void mongoDeploy::ShardSet::removeStopRouter (unsigned i) {
 }
 
 /** Enable sharding on given database */
-void mongoDeploy::shardDatabase (MongoS mongoS, string database) {
+void mongoDeploy::shardDatabase (string mongoSHostPort, string database) {
 	using namespace mongo;
 	BSONObj info;
 	DBClientConnection c;
-	c.connect (mongoDeploy::hostAndPort (mongoS));
+	c.connect (mongoSHostPort);
 	BSONObj cmd = BSON ("enablesharding" << database);
 	cout << cmd << " -> " << endl;
 	c.runCommand ("admin", cmd, info);
@@ -266,11 +266,11 @@ void mongoDeploy::shardDatabase (MongoS mongoS, string database) {
 }
 
 /** Shard collection on key */
-void mongoDeploy::shardCollection (MongoS mongoS, string fullCollection, mongo::BSONObj shardKey) {
+void mongoDeploy::shardCollection (string mongoSHostPort, string fullCollection, mongo::BSONObj shardKey) {
 	using namespace mongo;
 	BSONObj info;
 	DBClientConnection c;
-	c.connect (mongoDeploy::hostAndPort (mongoS));
+	c.connect (mongoSHostPort);
 	BSONObj cmd = BSON ("shardcollection" << fullCollection << "key" << shardKey);
 	cout << cmd << " -> " << endl;
 	c.runCommand ("admin", cmd, info);
