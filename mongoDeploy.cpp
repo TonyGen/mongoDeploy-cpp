@@ -10,11 +10,12 @@ using namespace std;
 
 /** Connection **/
 
+static unsigned DefaultPort = 27017;
+
 /** Host and port of a mongoD/S process */
 string mongoDeploy::hostPortString (remote::Process mongoProcess) {
-	remote::Host host = mongoProcess.host();
-	string port = * program::lookup ("port", remote::program (mongoProcess) .options);
-	return remote::hostPort(host).hostname + ":" + port;
+	boost::optional<string> port = program::lookup ("port", remote::program(mongoProcess).options);
+	return remote::hostPort(mongoProcess.host).hostname + ":" + (port ? *port : to_string(DefaultPort));
 }
 
 mongo::HostAndPort mongoDeploy::hostAndPort (remote::Process mongoProcess) {
@@ -63,7 +64,7 @@ mongoDeploy::MongoD mongoDeploy::startMongoD (remote::Host host, program::Option
 	stringstream ss;
 	ss << "rm -rf " << path << " && mkdir -p " << path;
 	program::Program program (ss.str(), "mongod", config2);
-	return remote::launch (host, program);
+	return remote::launch (program, host);
 }
 
 /** Replica set */
@@ -207,7 +208,7 @@ mongoDeploy::MongoS mongoDeploy::startMongoS (remote::Host host, ConfigSet cs, p
 	program::Program program;
 	program.executable = "mongos";
 	program.options = config2;
-	return remote::launch (host, program);
+	return remote::launch (program, host);
 }
 
 /** Start empty shard set with given config server specs and router (mongos) specs */
